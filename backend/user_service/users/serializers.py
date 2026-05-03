@@ -31,10 +31,18 @@ class SignupSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
+        from .models import Wallet
         user = User.objects.create_user(
             email=validated_data['email'],
             username=validated_data['username'],
             password=validated_data['password']
+        )
+        # Create initial USD wallet for user
+        Wallet.objects.create(
+            user=user,
+            currency='USD',
+            balance=10000.00,
+            locked_balance=0.00
         )
         return user
 

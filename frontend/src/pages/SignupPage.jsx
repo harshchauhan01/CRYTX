@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
-import Button from "../components/Button";
 import "./AuthPage.css";
 
 const API_BASE = "http://127.0.0.1:8001/api/auth";
 
 export default function Signup({ onSignup }) {
-  const [form, setForm] = useState({ email: "", username: "", password: "" });
+  const [form, setForm] = useState({ email: "", username: "", password: "", password_confirm: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -20,129 +19,96 @@ export default function Signup({ onSignup }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validation
-    if (!form.email || !form.username || !form.password) {
-      setError("All fields are required");
-      return;
-    }
-    
-    if (form.password.length < 8) {
-      setError("Password must be at least 8 characters");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-    
+    if (!form.email || !form.username || !form.password || !form.password_confirm) { setError("All fields required"); return; }
+    if (form.password.length < 8) { setError("Access code must be 8+ chars"); return; }
+    if (form.password !== form.password_confirm) { setError("Passwords do not match"); return; }
+    setLoading(true); setError("");
     try {
-      const response = await axios.post(`${API_BASE}/signup/`, form);
-      
-      if (!response.data.access) {
-        throw new Error("No access token received");
-      }
-      
-      localStorage.setItem("access_token", response.data.access);
-      if (response.data.refresh) {
-        localStorage.setItem("refresh_token", response.data.refresh);
-      }
+      const res = await axios.post(`${API_BASE}/signup/`, form);
+      if (!res.data.access) throw new Error("No token");
+      localStorage.setItem("access_token", res.data.access);
+      localStorage.setItem("refresh_token", res.data.refresh || "");
       localStorage.setItem("user_email", form.email);
-      
       if (onSignup) onSignup();
       navigate("/market");
     } catch (err) {
-      const errorMsg = err.response?.data?.email?.[0] ||
-                       err.response?.data?.username?.[0] ||
-                       err.response?.data?.password?.[0] ||
-                       err.response?.data?.error ||
-                       err.response?.data?.detail ||
-                       err.message ||
-                       "Signup failed. Try different credentials.";
-      setError(errorMsg);
-      console.error("Signup error:", err);
-    } finally {
-      setLoading(false);
-    }
+      const d = err.response?.data;
+      const msg = d?.email?.[0] || d?.username?.[0] || d?.password?.[0] || d?.error || d?.detail || "Registration failed.";
+      setError(msg);
+    } finally { setLoading(false); }
   };
 
   return (
     <div className="auth-page">
-      <div className="auth-container">
-        <div className="auth-logo">
-          <span className="logo-mark" aria-hidden="true" />
-          <h1>CRYTX</h1>
+      <div className="auth-wrap">
+        <span className="auth-crystal">◆</span>
+        <div className="auth-headline">
+          <span className="line1">CLAIM YOUR</span>
+          <span className="line2">HANDLE.</span>
+        </div>
+        <p className="auth-sub">
+          Register your trader identity and step onto the exchange floor.
+        </p>
+
+        <div className="auth-card">
+          <form onSubmit={handleSubmit} className="auth-form">
+            {error && <div className="auth-error">▶ {error}</div>}
+
+            <div className="auth-form-group">
+              <label className="auth-form-label" htmlFor="email">HANDLE_EMAIL</label>
+              <input
+                id="email" type="email" name="email"
+                className="auth-form-input"
+                placeholder="trader@wasteland.net"
+                value={form.email} onChange={handleChange} required
+                autoComplete="email"
+              />
+            </div>
+
+            <div className="auth-form-group">
+              <label className="auth-form-label" htmlFor="username">TRADER_NAME</label>
+              <input
+                id="username" type="text" name="username"
+                className="auth-form-input"
+                placeholder="VAULT_DWELLER"
+                value={form.username} onChange={handleChange} required
+                autoComplete="username"
+              />
+            </div>
+
+            <div className="auth-form-group">
+              <label className="auth-form-label" htmlFor="password">ACCESS_CODE</label>
+              <input
+                id="password" type="password" name="password"
+                className="auth-form-input"
+                placeholder="min 8 characters"
+                value={form.password} onChange={handleChange} required
+                autoComplete="new-password"
+              />
+            </div>
+
+            <div className="auth-form-group">
+              <label className="auth-form-label" htmlFor="password_confirm">CONFIRM_CODE</label>
+              <input
+                id="password_confirm" type="password" name="password_confirm"
+                className="auth-form-input"
+                placeholder="repeat access code"
+                value={form.password_confirm} onChange={handleChange} required
+                autoComplete="new-password"
+              />
+            </div>
+
+            <button type="submit" className="auth-submit-btn" disabled={loading}>
+              {loading ? "INITIALIZING..." : "► ENTER MARKET"}
+            </button>
+          </form>
         </div>
 
-        <h2>Join the Crystal Economy</h2>
-        <p className="auth-subtitle">Start your trading journey and build an empire.</p>
-
-        <form onSubmit={handleSubmit} className="auth-form">
-          {error && <div className="error-message">{error}</div>}
-
-          <div className="form-group">
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              name="email"
-              placeholder="your@email.com"
-              value={form.email}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="username">Username</label>
-            <input
-              id="username"
-              type="text"
-              name="username"
-              placeholder="TraderName"
-              value={form.username}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              name="password"
-              placeholder="••••••••"
-              value={form.password}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <Button
-            variant="primary"
-            size="lg"
-            fullWidth
-            type="submit"
-            disabled={loading}
-          >
-            {loading ? "Creating account..." : "Sign Up"}
-          </Button>
-        </form>
-
-        <div className="auth-footer">
-          <p>
-            Already have an account?{" "}
-            <Link to="/login" className="auth-link">
-              Login here
-            </Link>
-          </p>
+        <p className="auth-starter-note">◆ FREE STARTER WALLET · <span>10,000</span> · CRYSTALS ON ENTRY</p>
+        <div className="auth-footer" style={{ marginTop: 12 }}>
+          ALREADY REGISTERED?&nbsp;
+          <Link to="/login" className="auth-footer-link">JACK IN ►</Link>
         </div>
-      </div>
-
-      <div className="auth-decoration">
-        <div className="pixel-crystal pixel-crystal-1" />
-        <div className="pixel-crystal pixel-crystal-2" />
-        <div className="pixel-crystal pixel-crystal-3" />
       </div>
     </div>
   );

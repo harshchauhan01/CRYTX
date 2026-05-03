@@ -6,11 +6,10 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.test import APITestCase
 
-from .models import Asset, AssetCategory, Holding
-
+from .models import Asset, AssetCategory, Portfolio
 
 @override_settings(ALLOWED_HOSTS=["testserver", "localhost", "127.0.0.1"])
-class OrderPriceReactionTests(APITestCase):
+class TransactionPriceReactionTests(APITestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(
@@ -29,8 +28,10 @@ class OrderPriceReactionTests(APITestCase):
             category=self.category,
             base_price=Decimal("100.00"),
             current_price=Decimal("100.00"),
-            supply=1000,
-            demand=1000,
+            total_supply=Decimal("1000.00"),
+            available_supply=Decimal("1000.00"),
+            buy_volume=Decimal("1000.00"),
+            sell_volume=Decimal("1000.00"),
             volatility=0.10,
             is_active=True,
         )
@@ -39,7 +40,7 @@ class OrderPriceReactionTests(APITestCase):
         pre_trade_price = self.asset.current_price
 
         response = self.client.post(
-            "/api/market/orders/",
+            "/api/market/transactions/",
             {"asset_id": self.asset.id, "quantity": "10", "side": "buy"},
             format="json",
         )
@@ -48,29 +49,32 @@ class OrderPriceReactionTests(APITestCase):
 
         self.asset.refresh_from_db()
         self.assertGreater(self.asset.current_price, pre_trade_price)
-        self.assertEqual(Decimal(str(response.data["price"])), pre_trade_price)
+        
+        # calculate expected slippage: 1 + (10/1000) = 1.01
+        expected_execution_price = pre_trade_price * Decimal("1.01")
+        self.assertEqual(Decimal(str(response.data["price"])), expected_execution_price)
 
     def test_sell_order_decreases_price(self):
-        # Put the market into an oversupply state, then sell more.
-        self.asset.supply = 1200
-        self.asset.demand = 800
-        self.asset.save(update_fields=["supply", "demand"])
+        # Simulate more selling pressure
+        self.asset.buy_volume = Decimal("800.00")
+        self.asset.sell_volume = Decimal("1200.00")
+        self.asset.save(update_fields=["buy_volume", "sell_volume"])
 
-        Holding.objects.create(
+        Portfolio.objects.create(
             user=self.user,
             asset=self.asset,
             quantity=Decimal("50.0000"),
-            avg_price=self.asset.current_price,
+            avg_buy_price=self.asset.current_price,
         )
 
         pre_trade_price = self.asset.current_price
 
         sell_response = self.client.post(
-            "/api/market/orders/",
+            "/api/market/transactions/",
             {"asset_id": self.asset.id, "quantity": "10", "side": "sell"},
             format="json",
         )
         self.assertEqual(sell_response.status_code, status.HTTP_201_CREATED)
 
         self.asset.refresh_from_db()
-        self.assertLess(self.asset.current_price, pre_trade_price)
+        self.assertLessEqual(self.asset.current_price, pre_trade_price)

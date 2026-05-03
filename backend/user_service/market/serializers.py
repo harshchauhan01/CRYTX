@@ -23,19 +23,19 @@ class AssetSerializer(serializers.ModelSerializer):
         model = models.Asset
         fields = (
             'id', 'name', 'category', 'category_name', 'base_price', 'current_price',
-            'supply', 'demand', 'volatility', 'is_active', 'created_by', 'created_by_username', 'created_at', 'updated_at'
+            'total_supply', 'available_supply', 'buy_volume', 'sell_volume', 'event_multiplier', 'volatility', 'is_active', 'created_by', 'created_by_username', 'created_at', 'updated_at'
         )
         read_only_fields = ('created_at', 'updated_at')
 
 
-class HoldingSerializer(serializers.ModelSerializer):
+class PortfolioSerializer(serializers.ModelSerializer):
     asset_name = serializers.CharField(source='asset.name', read_only=True)
     asset_price = serializers.DecimalField(source='asset.current_price', read_only=True, max_digits=20, decimal_places=2)
     value = serializers.SerializerMethodField()
 
     class Meta:
-        model = models.Holding
-        fields = ('id', 'user', 'asset', 'asset_name', 'asset_price', 'quantity', 'avg_price', 'value')
+        model = models.Portfolio
+        fields = ('id', 'user', 'asset', 'asset_name', 'asset_price', 'quantity', 'avg_buy_price', 'value')
         read_only_fields = ('user',)
 
     def get_value(self, obj):
@@ -43,14 +43,14 @@ class HoldingSerializer(serializers.ModelSerializer):
         return obj.quantity * obj.asset.current_price
 
 
-class OrderSerializer(serializers.ModelSerializer):
+class TransactionSerializer(serializers.ModelSerializer):
     asset_name = serializers.CharField(source='asset.name', read_only=True)
     user_username = serializers.CharField(source='user.username', read_only=True)
 
     class Meta:
-        model = models.Order
-        fields = ('id', 'user', 'user_username', 'asset', 'asset_name', 'quantity', 'price', 'side', 'status', 'created_at', 'completed_at')
-        read_only_fields = ('user', 'completed_at')
+        model = models.Transaction
+        fields = ('id', 'user', 'user_username', 'asset', 'asset_name', 'transaction_type', 'quantity', 'price', 'timestamp')
+        read_only_fields = ('user',)
 
 
 class CompanySerializer(serializers.ModelSerializer):
@@ -63,9 +63,22 @@ class CompanySerializer(serializers.ModelSerializer):
 
 
 class MarketEventSerializer(serializers.ModelSerializer):
+    target_asset_name = serializers.CharField(source='target_asset.name', read_only=True, allow_null=True)
+    is_active_now = serializers.SerializerMethodField()
+
     class Meta:
         model = models.MarketEvent
-        fields = ('id', 'title', 'description', 'effect_json', 'impact', 'scheduled_at', 'executed')
+        fields = (
+            'id', 'title', 'description', 'effect_type',
+            'target_asset', 'target_asset_name',
+            'demand_multiplier', 'volatility_multiplier', 'supply_shock',
+            'scheduled_at', 'expires_at', 'activated_at',
+            'executed', 'expired', 'is_active_now',
+        )
+
+    def get_is_active_now(self, obj):
+        """True if the event is currently live (executed but not yet expired)."""
+        return obj.executed and not obj.expired
 
 
 class LedgerEntrySerializer(serializers.ModelSerializer):

@@ -57,6 +57,24 @@ MIDDLEWARE = [
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
+
+# Explicitly whitelist the custom Idempotency-Key header.
+# CORS_ALLOW_ALL_ORIGINS only controls which origins are allowed, NOT which
+# request headers. Custom headers must be listed here or the browser's
+# preflight OPTIONS request will be rejected with a CORS error.
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'idempotency-key',   # Required for CRYTX trade deduplication
+]
+
 ROOT_URLCONF = 'user_service.urls'
 AUTH_USER_MODEL = 'users.User'
 
@@ -72,6 +90,43 @@ SIMPLE_JWT = {
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
 }
+
+# ─── Celery ────────────────────────────────────────────────────────────────────
+# In development: tasks run inline (no separate worker needed).
+# In production: set CELERY_TASK_ALWAYS_EAGER = False and point to a real Redis.
+CELERY_BROKER_URL = 'memory://'          # in-proc broker, no Redis needed in dev
+CELERY_RESULT_BACKEND = 'cache+memory://' # in-memory result store
+CELERY_TASK_ALWAYS_EAGER = True          # run tasks synchronously in dev
+CELERY_TASK_EAGER_PROPAGATES = True      # re-raise exceptions from tasks
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TIMEZONE = 'UTC'
+
+# Celery Beat periodic task schedule (used with: celery -A user_service beat -l info)
+CELERY_BEAT_SCHEDULE = {
+    # Drives organic noise — ticks every asset's price even without trades
+    'price-tick-every-10s': {
+        'task': 'market.tasks.price_tick_task',
+        'schedule': 10.0,  # seconds
+    },
+    # Chaos Engine — activates and expires MarketEvents
+    'apply-events-every-30s': {
+        'task': 'market.tasks.apply_events_task',
+        'schedule': 30.0,  # seconds
+    },
+}
+
+# ─── Cache (Django) ────────────────────────────────────────────────────────────
+# Uses local-memory cache in dev (no Redis process needed).
+# In production replace 'django.core.cache.backends.locmem.LocMemCache'
+# with 'django_redis.cache.RedisCache' and set LOCATION to your Redis URL.
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'crytx-market-cache',
+    }
+}
+
 
 TEMPLATES = [
     {

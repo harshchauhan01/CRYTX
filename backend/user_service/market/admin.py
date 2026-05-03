@@ -9,19 +9,19 @@ class AssetCategoryAdmin(admin.ModelAdmin):
 
 @admin.register(models.Asset)
 class AssetAdmin(admin.ModelAdmin):
-    list_display = ('name', 'category', 'current_price', 'supply', 'demand', 'is_active')
+    list_display = ('name', 'category', 'current_price', 'total_supply', 'available_supply', 'is_active')
     list_filter = ('category', 'is_active')
 
 
-@admin.register(models.Holding)
-class HoldingAdmin(admin.ModelAdmin):
-    list_display = ('user', 'asset', 'quantity', 'avg_price')
+@admin.register(models.Portfolio)
+class PortfolioAdmin(admin.ModelAdmin):
+    list_display = ('user', 'asset', 'quantity', 'avg_buy_price')
 
 
-@admin.register(models.Order)
-class OrderAdmin(admin.ModelAdmin):
-    list_display = ('user', 'asset', 'side', 'quantity', 'price', 'status', 'created_at')
-    list_filter = ('status', 'side')
+@admin.register(models.Transaction)
+class TransactionAdmin(admin.ModelAdmin):
+    list_display = ('user', 'asset', 'transaction_type', 'quantity', 'price', 'timestamp')
+    list_filter = ('transaction_type',)
 
 
 @admin.register(models.Company)

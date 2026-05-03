@@ -1,272 +1,320 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
-import Card from "../components/Card";
-import Button from "../components/Button";
+import { ResponsiveContainer, LineChart, Line, YAxis } from "recharts";
+import { soundFX } from "../utils/soundFX";
 import "./MarketDashboard.css";
 
 const API_BASE = "http://127.0.0.1:8001/api/market";
+const ICONS = { Food:"🌾", Air:"💨", Medical:"💊", Energy:"⚡", Water:"💧", Ammo:"🎯", default:"◆" };
+
+function fmtVal(v) {
+  const n = parseFloat(v)||0;
+  if(n>=1_000_000) return (n/1_000_000).toFixed(2)+"M";
+  if(n>=1_000)     return (n/1_000).toFixed(1)+"K";
+  return n.toFixed(2);
+}
+
+function PctChange({ current, base }) {
+  const cur=parseFloat(current)||0, b=parseFloat(base)||0;
+  if(!b) return null;
+  const pct=((cur-b)/b)*100, up=pct>=0;
+  return <span className={up?"at-chg-up":"at-chg-down"}>{up?"▲":"▼"} {Math.abs(pct).toFixed(1)}%</span>;
+}
 
 export default function MarketDashboard({ onBalanceUpdate }) {
-  const [assets, setAssets] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedAsset, setSelectedAsset] = useState(null);
-  const [quantity, setQuantity] = useState(1);
-  const [tradeType, setTradeType] = useState("buy");
-  const [error, setError] = useState(null);
+  const [assets,    setAssets]    = useState([]);
+  const [holdings,  setHoldings]  = useState({});
+  const [selected,  setSelected]  = useState(null);
+  const [history,   setHistory]   = useState([]);
+  const [side,      setSide]      = useState("buy");
+  const [qty,       setQty]       = useState(1);
+  const [cash,      setCash]      = useState(null);
+  const [ordersQ,   setOrdersQ]   = useState(0);
+  const [loading,   setLoading]   = useState(true);
+  const [tradeMsg,  setTradeMsg]  = useState(null);
+  const [tradeErr,  setTradeErr]  = useState(null);
+  const [executing, setExecuting] = useState(false);
+
+  useEffect(() => { fetchAll(); }, []);
 
   useEffect(() => {
-    fetchAssets();
-    fetchBalance();
-  }, []);
+    if (!selected) return;
+    const fetchHist = async () => {
+      try {
+        const res = await axios.get(`${API_BASE}/assets/${selected.id}/history/`);
+        setHistory(res.data);
+      } catch (err) { console.error(err); }
+    };
+    fetchHist();
+    const interval = setInterval(fetchHist, 10000); // Poll chart every 10s
+    return () => clearInterval(interval);
+  }, [selected?.id]);
 
-  const getVolatilityLabel = (vol) => {
-    const pct = Math.round((vol || 0) * 100);
-    if (pct >= 15) return { label: "High", cls: "high" };
-    if (pct >= 5) return { label: "Medium", cls: "medium" };
-    return { label: "Low", cls: "low" };
-  };
-
-  const formatChange = (current, base) => {
-    const cur = parseFloat(current) || 0;
-    const b = parseFloat(base) || 0;
-    if (!b) return { pct: 0, cls: "neutral", symbol: "—" };
-    const diff = cur - b;
-    const pct = (diff / b) * 100;
-    if (pct > 0.1) return { pct, cls: "up", symbol: "▲" };
-    if (pct < -0.1) return { pct, cls: "down", symbol: "▼" };
-    return { pct, cls: "neutral", symbol: "—" };
-  };
-
-  const fetchBalance = async () => {
-    try {
-      const token = localStorage.getItem("access_token");
-      const response = await axios.get(`${API_BASE}/holdings/portfolio_value/`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (onBalanceUpdate) {
-        onBalanceUpdate(response.data.cash_balance);
-      }
-    } catch (err) {
-      console.error("Failed to fetch balance", err);
-    }
-  };
-
-  const fetchAssets = async () => {
+  const fetchAll = async () => {
+    const token = localStorage.getItem("access_token");
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE}/assets/`);
-      setAssets(response.data.results || response.data);
-    } catch (err) {
-      setError("Failed to load assets");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      const [ar, pr, vr] = await Promise.all([
+        axios.get(`${API_BASE}/assets/`),
+        axios.get(`${API_BASE}/portfolios/`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API_BASE}/portfolios/portfolio_value/`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      const assetList = ar.data.results || ar.data;
+      setAssets(assetList);
 
-  const handleTradeSubmit = async (e) => {
-    e.preventDefault();
-    if (!selectedAsset) return;
+      // Build holdings map
+      const hmap = {};
+      (pr.data.results || pr.data).forEach(h => { hmap[h.asset_id || h.asset] = h.quantity; });
+      setHoldings(hmap);
 
-    // Validation
-    const qty = parseFloat(quantity);
-    if (!qty || qty <= 0) {
-      setError("Please enter a valid quantity");
-      return;
-    }
-
-    try {
-      setError(null);
-      const token = localStorage.getItem("access_token");
-      
-      if (!token) {
-        setError("Authentication token missing. Please log in again.");
-        return;
+      if(vr.data) {
+        setCash(parseFloat(vr.data.cash_balance));
+        if(onBalanceUpdate) onBalanceUpdate(vr.data.cash_balance);
       }
 
-      const response = await axios.post(
-        `${API_BASE}/orders/`,
-        {
-          asset_id: selectedAsset.id,
-          quantity: qty,
-          side: tradeType,
-        },
-        {
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      setError(null);
-      setSelectedAsset(null);
-      setQuantity(1);
-      fetchAssets();
-      fetchBalance();
-      alert(`${tradeType.toUpperCase()} order placed successfully!`);
-    } catch (err) {
-      const errorMsg = err.response?.data?.error ||
-                       err.response?.data?.detail ||
-                       err.message ||
-                       "Trade failed. Please try again.";
-      setError(errorMsg);
-      console.error("Trade error:", err);
-    }
+      const tr = await axios.get(`${API_BASE}/transactions/`, { headers: { Authorization: `Bearer ${token}` } });
+      setOrdersQ((tr.data.results || tr.data).length);
+    } catch {}
+    finally { setLoading(false); }
   };
 
-  if (loading) {
-    return (
-      <div className="market-dashboard">
-        <div className="loading-spinner">
-          <div className="spinner"></div>
-          <p>Loading markets...</p>
-        </div>
-      </div>
-    );
-  }
+  const openPanel = (asset, s="buy") => {
+    soundFX.blip();
+    setSelected(asset); setSide(s); setQty(1); setTradeMsg(null); setTradeErr(null); setHistory([]);
+  };
+
+  const changeQty = (delta) => {
+    soundFX.blip();
+    setQty(q => Math.max(0.1, parseFloat((parseFloat(q) + delta).toFixed(2))));
+  };
+
+  const executeTrade = async () => {
+    if (!selected || qty <= 0) return;
+    setExecuting(true); setTradeMsg(null); setTradeErr(null);
+    try {
+      const token = localStorage.getItem("access_token");
+      await axios.post(
+        `${API_BASE}/transactions/`,
+        { asset_id: selected.id, quantity: qty, side },
+        { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() } }
+      );
+      setTradeMsg(`${side.toUpperCase()} ORDER EXECUTED ✔`);
+      setOrdersQ(q => q+1);
+      await fetchAll();
+      setSelected(asst => assets.find(a => a.id === asst?.id) || asst);
+      soundFX.execute();
+    } catch(err) {
+      soundFX.error();
+      setTradeErr(err.response?.data?.error || err.response?.data?.detail || "Trade failed");
+    } finally { setExecuting(false); }
+  };
+
+  const totalHeld = useMemo(() => Object.values(holdings).reduce((s,v)=>s+parseFloat(v||0),0), [holdings]);
+  const totalVol  = useMemo(() => assets.reduce((s,a)=>s+parseFloat(a.buy_volume||0)+parseFloat(a.sell_volume||0),0), [assets]);
+  const selAsset  = useMemo(() => selected ? assets.find(a=>a.id===selected.id)||selected : null, [selected, assets]);
+  const cost      = useMemo(() => (parseFloat(qty)||0) * parseFloat(selAsset?.current_price||0), [qty, selAsset]);
+
+  if(loading) return (
+    <div className="exchange-page" style={{alignItems:"center",justifyContent:"center"}}>
+      <div className="px-loader">LOADING EXCHANGE FLOOR...</div>
+    </div>
+  );
 
   return (
-    <div className="market-dashboard">
-      <div className="dashboard-header">
-        <h1>Crystal Markets</h1>
-        <p className="subtitle">Trade crystal-backed assets and build your wealth</p>
+    <div className="exchange-page">
+      <div className="exchange-container">
+        {/* Sub-header */}
+        <div className="exchange-header">
+        <div className="exchange-header-label">MKT / LIVE</div>
+        <div className="exchange-header-title"><span style={{color:"var(--cyan)"}}>EXCHANGE</span> <span style={{color:"var(--white)"}}>FLOOR</span></div>
+        <div className="exchange-header-sub">Buy low, sell loud. Prices tick every 10s.</div>
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
-
-      <div className="assets-grid">
-        {assets.map((asset) => {
-          const volPercent = Math.round((asset.volatility || 0) * 100);
-          const volMeta = getVolatilityLabel(asset.volatility || 0);
-          const priceChange = formatChange(asset.current_price, asset.base_price);
-          const supplyPressure = asset.supply > asset.demand ? 'oversupply' : (asset.demand > asset.supply ? 'highdemand' : 'balanced');
-          const volBg = volMeta.cls === 'high' ? 'linear-gradient(90deg,#ff8a80,#ff5252)' : (volMeta.cls === 'medium' ? 'linear-gradient(90deg,#ffd86b,#ffb74d)' : 'linear-gradient(90deg,#6cff7d,#8ef0a6)');
-
-          return (
-            <Card key={asset.id} hover className="asset-card">
-              <div className="card-header">
-                <h3 className="card-title">{asset.name}</h3>
-                <span className="card-badge">{asset.category_name}</span>
-              </div>
-
-              <div className="card-body">
-                <div className="card-price">
-                  <span className="money-tag">CR</span>
-                  <span className="price-value">{parseFloat(asset.current_price).toFixed(2)}</span>
-                  <span className={`price-change ${priceChange.cls}`}>
-                    {priceChange.symbol} {Math.abs(priceChange.pct).toFixed(1)}%
-                  </span>
-                </div>
-
-                <div className="card-stats">
-                  <div className={`stat ${supplyPressure === 'oversupply' ? 'oversupply' : (supplyPressure === 'highdemand' ? 'highdemand' : 'balanced')}`}>
-                    <div className="stat-label">Supply</div>
-                    <div className="stat-value">
-                      {asset.supply.toLocaleString()}
-                      {supplyPressure === 'oversupply' ? <span className="stat-arrow"> ▼</span> : (supplyPressure === 'highdemand' ? <span className="stat-arrow"> ▲</span> : null)}
-                    </div>
-                  </div>
-                  <div className={`stat ${supplyPressure === 'highdemand' ? 'highdemand' : (supplyPressure === 'oversupply' ? 'oversupply' : 'balanced')}`}>
-                    <div className="stat-label">Demand</div>
-                    <div className="stat-value">
-                      {asset.demand.toLocaleString()}
-                      {supplyPressure === 'highdemand' ? <span className="stat-arrow"> ▲</span> : (supplyPressure === 'oversupply' ? <span className="stat-arrow"> ▼</span> : null)}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="volatility-meter">
-                  <div className="label">Volatility: {volPercent}% — <span className={`vol-label ${volMeta.cls}`}>{volMeta.label}</span></div>
-                  <div className="meter" style={{ background: volBg }}>
-                    <div className="fill" style={{ width: `${volPercent}%`, opacity: 1 }}></div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="card-footer">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  fullWidth
-                  onClick={() => {
-                    setSelectedAsset(asset);
-                    setTradeType("buy");
-                  }}
-                >
-                  Buy
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  fullWidth
-                  onClick={() => {
-                    setSelectedAsset(asset);
-                    setTradeType("sell");
-                  }}
-                >
-                  Sell
-                </Button>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
-
-      {selectedAsset && (
-        <div className="modal-overlay" onClick={() => setSelectedAsset(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setSelectedAsset(null)}>✕</button>
-
-            <h2>
-              {tradeType === "buy" ? "Buy" : "Sell"} {selectedAsset.name}
-            </h2>
-
-            {error && <div className="modal-error-banner">{error}</div>}
-
-            <form onSubmit={handleTradeSubmit}>
-              <div className="form-group">
-                <label>Quantity</label>
-                <input
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Price per unit</label>
-                <input
-                  type="text"
-                  value={`CR ${parseFloat(selectedAsset.current_price).toFixed(2)}`}
-                  disabled
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Total cost</label>
-                <input
-                  type="text"
-                  value={`CR ${(quantity * selectedAsset.current_price).toFixed(2)}`}
-                  disabled
-                />
-              </div>
-
-              <Button
-                variant={tradeType === "buy" ? "success" : "danger"}
-                size="lg"
-                fullWidth
-                type="submit"
-              >
-                {tradeType === "buy" ? "Confirm Buy" : "Confirm Sell"}
-              </Button>
-            </form>
-          </div>
+      {/* Ticker */}
+      <div className="ex-ticker-wrap">
+        <div className="ex-ticker-track">
+          {[...assets,...assets].map((a,i)=>{
+            const pct=parseFloat(a.base_price)?((parseFloat(a.current_price)-parseFloat(a.base_price))/parseFloat(a.base_price))*100:0;
+            const up=pct>=0;
+            return(
+              <span key={i} className="ex-tick-item">
+                {ICONS[a.category_name]||"◆"}
+                <span className="ex-tick-name">{a.name.substring(0,4).toUpperCase()}</span>
+                <span className="ex-tick-price">◆{parseFloat(a.current_price).toFixed(2)}</span>
+                <span className={up?"ex-tick-up":"ex-tick-down"}>{up?"▲":"▼"}{Math.abs(pct).toFixed(1)}%</span>
+                <span style={{color:"var(--border)",margin:"0 8px"}}>|</span>
+              </span>
+            );
+          })}
         </div>
-      )}
+      </div>
+
+      {/* Stat boxes */}
+      <div className="exchange-stats">
+        <div className="ex-stat-box">
+          <div className="ex-stat-label">CRYSTAL WALLET</div>
+          <div className="ex-stat-val">◆ {cash!=null ? fmtVal(cash) : "—"}</div>
+        </div>
+        <div className="ex-stat-box">
+          <div className="ex-stat-label">VAULT HOLDINGS</div>
+          <div className="ex-stat-val green">{totalHeld.toFixed(0)} units</div>
+        </div>
+        <div className="ex-stat-box">
+          <div className="ex-stat-label">ORDERS FILLED</div>
+          <div className="ex-stat-val">{ordersQ}</div>
+        </div>
+      </div>
+
+      {/* Split body */}
+      <div className="exchange-body">
+        {/* LEFT: asset table */}
+        <div className="exchange-left">
+          <table className="asset-table">
+            <thead>
+              <tr>
+                <th>ASSET</th>
+                <th>PRICE</th>
+                <th>24H</th>
+                <th>HELD</th>
+                <th>ACTION</th>
+              </tr>
+            </thead>
+            <tbody>
+              {assets.map(asset=>{
+                const held = parseFloat(holdings[asset.id]||0);
+                const pct  = parseFloat(asset.base_price)
+                  ? ((parseFloat(asset.current_price)-parseFloat(asset.base_price))/parseFloat(asset.base_price))*100
+                  : 0;
+                const up = pct>=0;
+                return(
+                  <tr key={asset.id}
+                    className={selAsset?.id===asset.id?"active-row":""}
+                    onClick={()=>openPanel(asset, side)}>
+                    <td>
+                      <div className="at-asset-wrap">
+                        <span className="at-icon">{ICONS[asset.category_name]||"◆"}</span>
+                        <div>
+                          <div className="at-name">{(asset.category_name||"ASSET").toUpperCase()}</div>
+                          <div className="at-sub">{asset.name}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td><span className="at-price">◆{parseFloat(asset.current_price).toFixed(2)}</span></td>
+                    <td>
+                      <span className={up?"at-chg-up":"at-chg-down"}>
+                        {up?"▲":"▼"} {Math.abs(pct).toFixed(1)}%
+                      </span>
+                    </td>
+                    <td><span className="at-held">{held>0?held:0}</span></td>
+                    <td>
+                      <div className="at-actions" onClick={e=>e.stopPropagation()}>
+                        <button className="at-btn-buy" onMouseEnter={()=>soundFX.blip()} onClick={()=>openPanel(asset,"buy")}>BUY</button>
+                        <button className="at-btn-sell" onMouseEnter={()=>soundFX.blip()} onClick={()=>openPanel(asset,"sell")}>SELL</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* RIGHT: trade panel */}
+        <div className="exchange-right">
+          {!selAsset ? (
+            <div className="trade-panel-empty">
+              SELECT AN ASSET TO TRADE
+            </div>
+          ) : (
+            <div className="trade-panel panel-border">
+              {/* Panel header */}
+              <div className="tp-header">
+                <div>
+                  <div className="tp-label">TRADING</div>
+                  <div className="tp-name">{(selAsset.category_name||"ASSET").toUpperCase()}</div>
+                  <div className="tp-sub">{selAsset.name}</div>
+                </div>
+                <div className="tp-icon">{ICONS[selAsset.category_name]||"◆"}</div>
+              </div>
+
+              <div className="tp-body">
+                {/* Last price & Chart */}
+                <div className="tp-price-block">
+                  <div className="tp-price-label">LAST PRICE</div>
+                  <div className="tp-price-val">◆ {parseFloat(selAsset.current_price).toFixed(2)}</div>
+                  <div className="tp-chart-wrap" style={{ height: 120, marginTop: 16, borderBottom: "1px solid var(--border)", paddingBottom: 16 }}>
+                    {history.length > 1 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={history}>
+                          <YAxis domain={['dataMin', 'dataMax']} hide />
+                          <Line type="stepAfter" dataKey="price" stroke="var(--cyan)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--border)", fontFamily: "var(--font-pixel)", fontSize: 10 }}>AWAITING TICK DATA...</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Buy / Sell toggle */}
+                <div>
+                  <div className="tp-price-label" style={{marginBottom:8}}>SIDE</div>
+                  <div className="tp-side-toggle">
+                    <button className={`tp-side-btn ${side==="buy"?"buy-active":""}`} onMouseEnter={()=>soundFX.blip()} onClick={()=>setSide("buy")}>► BUY</button>
+                    <button className={`tp-side-btn ${side==="sell"?"sell-active":""}`} onMouseEnter={()=>soundFX.blip()} onClick={()=>setSide("sell")}>▼ SELL</button>
+                  </div>
+                </div>
+
+                {/* Quantity */}
+                <div>
+                  <div className="qty-label">QUANTITY</div>
+                  <div className="qty-stepper">
+                    <button className="qty-dec" onClick={()=>changeQty(-1)}>−</button>
+                    <input
+                      type="number" min="0.1" step="0.1"
+                      className="qty-input"
+                      value={qty}
+                      onChange={e=>setQty(Math.max(0.1, parseFloat(e.target.value)||0))}
+                    />
+                    <button className="qty-inc" onClick={()=>changeQty(1)}>+</button>
+                  </div>
+                </div>
+
+                {/* Total */}
+                <div className="tp-total-row">
+                  <span className="tp-total-label">TOTAL</span>
+                  <span className="tp-total-val">◆ {cost.toFixed(2)}</span>
+                </div>
+
+                {/* Messages */}
+                {tradeMsg && <div className="tp-msg-ok">✔ {tradeMsg}</div>}
+                {tradeErr && <div className="tp-msg-err">▶ {tradeErr}</div>}
+
+                {/* Execute */}
+                <button
+                  className={`tp-exec-btn ${side}`}
+                  onClick={executeTrade}
+                  disabled={executing}
+                >
+                  {executing ? "PROCESSING..." : side==="buy" ? "► EXECUTE BUY" : "▼ EXECUTE SELL"}
+                </button>
+
+                {/* Circuit breaker warning */}
+                {selAsset.circuit_breaker_tripped && (
+                  <div style={{
+                    border:"1px solid var(--red)", color:"var(--red)",
+                    padding:"8px 12px", fontFamily:"var(--font-pixel)",
+                    fontSize:8, letterSpacing:2, animation:"blink 1s step-end infinite"
+                  }}>
+                    ⚠ CIRCUIT BREAKER TRIPPED — TRADING HALTED
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+        </div>
+      </div>
     </div>
   );
 }

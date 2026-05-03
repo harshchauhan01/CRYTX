@@ -35,167 +35,92 @@ class AssetViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = self.get_serializer(assets, many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['get'], permission_classes=[permissions.AllowAny])
+    def history(self, request, pk=None):
+        """Get price history for charting"""
+        asset = self.get_object()
+        # Get the last 60 ticks (10 minutes of data at 10s intervals)
+        history = asset.price_history.order_by('-timestamp')[:60]
+        # Return in chronological order
+        data = [{'time': h.timestamp.isoformat(), 'price': float(h.price)} for h in reversed(history)]
+        return Response(data)
 
-class HoldingViewSet(viewsets.ModelViewSet):
-    serializer_class = serializers.HoldingSerializer
+
+class PortfolioViewSet(viewsets.ModelViewSet):
+    serializer_class = serializers.PortfolioSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
-        return models.Holding.objects.filter(user=self.request.user)
+        return models.Portfolio.objects.filter(user=self.request.user)
 
     def create(self, request, *args, **kwargs):
-        return Response({'error': 'Cannot create holdings directly. Use /orders/ endpoint.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'Cannot create portfolios directly. Use /transactions/ endpoint.'}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
     def portfolio_value(self, request):
         """Calculate total portfolio value"""
-        holdings = self.get_queryset()
-        total_value = sum(h.quantity * h.asset.current_price for h in holdings)
-        user_balance = request.user.balance
+        portfolios = self.get_queryset()
+        total_value = sum(p.quantity * p.asset.current_price for p in portfolios)
+        
+        from users.models import Wallet
+        user_wallet = Wallet.objects.filter(user=request.user, currency='USD').first()
+        user_balance = user_wallet.balance if user_wallet else Decimal('0.00')
+        
         net_worth = Decimal(total_value) + user_balance
         return Response({
-            'total_holdings_value': float(total_value),
+            'total_portfolios_value': float(total_value),
             'cash_balance': float(user_balance),
             'net_worth': float(net_worth)
         })
 
 
-class OrderViewSet(viewsets.ModelViewSet):
-    serializer_class = serializers.OrderSerializer
+from .trading_engine import execute_buy, execute_sell
+
+class TransactionViewSet(viewsets.ModelViewSet):
+    serializer_class = serializers.TransactionSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
-        return models.Order.objects.filter(user=self.request.user).order_by('-created_at')
+        return models.Transaction.objects.filter(user=self.request.user).order_by('-timestamp')
 
     def create(self, request, *args, **kwargs):
-        """Place a buy or sell order with atomic transaction"""
+        """Place a buy or sell transaction with atomic transaction engine"""
+        idempotency_key = request.headers.get('Idempotency-Key')
+        if not idempotency_key:
+            return Response({'error': 'Idempotency-Key header is required'}, status=status.HTTP_400_BAD_REQUEST)
+
         asset_id = request.data.get('asset_id')
-        quantity = Decimal(str(request.data.get('quantity', 0)))
+        quantity = request.data.get('quantity', 0)
         side = request.data.get('side', '').lower()
 
         if not asset_id or not quantity or side not in ['buy', 'sell']:
             return Response({'error': 'Invalid asset_id, quantity, or side'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            with transaction.atomic():
-                # Lock asset row to prevent race conditions
-                asset = models.Asset.objects.select_for_update().get(id=asset_id, is_active=True)
+            if side == 'buy':
+                txn = execute_buy(request.user, asset_id, quantity, idempotency_key)
+            elif side == 'sell':
+                txn = execute_sell(request.user, asset_id, quantity, idempotency_key)
 
-                # execution price is the price at which this trade occurs
-                execution_price = asset.current_price
-
-                if side == 'buy':
-                    total_cost = quantity * execution_price
-                    if request.user.balance < total_cost:
-                        return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
-
-                    # Deduct crystals from user
-                    request.user.balance -= total_cost
-                    request.user.save()
-
-                    # Update holding
-                    holding, _ = models.Holding.objects.get_or_create(user=request.user, asset=asset)
-                    if holding.quantity == 0:
-                        holding.avg_price = asset.current_price
-                    else:
-                        holding.avg_price = (holding.quantity * holding.avg_price + quantity * asset.current_price) / (holding.quantity + quantity)
-                    holding.quantity += quantity
-                    holding.save()
-
-                    # Update asset supply/demand
-                    asset.supply -= quantity
-                    asset.demand += quantity
-
-                elif side == 'sell':
-                    holding = models.Holding.objects.get(user=request.user, asset=asset)
-                    if holding.quantity < quantity:
-                        return Response({'error': 'Insufficient holdings'}, status=status.HTTP_400_BAD_REQUEST)
-
-                    total_revenue = quantity * asset.current_price
-                    request.user.balance += total_revenue
-                    request.user.save()
-
-                    holding.quantity -= quantity
-                    if holding.quantity == 0:
-                        holding.delete()
-                    else:
-                        holding.save()
-
-                    asset.supply += quantity
-                    asset.demand -= quantity
-
-                # after adjusting supply/demand, compute new price based on imbalance and volatility
-                try:
-                    # use Decimal for precision
-                    supply = Decimal(asset.supply)
-                    demand = Decimal(asset.demand)
-                    total = supply + demand
-                    imbalance = demand - supply
-                    vol = Decimal(str(asset.volatility)) if asset.volatility is not None else Decimal('0')
-
-                    if total <= 0:
-                        delta = Decimal('0')
-                    else:
-                        # proportion in [-1,1]
-                        prop = imbalance / (total + Decimal(1))
-                        # delta is proportional to volatility and imbalance
-                        delta = vol * prop
-
-                    # clamp delta to reasonable bounds [-0.2, 0.2]
-                    max_move = Decimal('0.2')
-                    if delta > max_move:
-                        delta = max_move
-                    if delta < -max_move:
-                        delta = -max_move
-
-                    new_price = (execution_price * (Decimal(1) + delta)).quantize(Decimal('0.01'))
-                    if new_price <= 0:
-                        new_price = Decimal('0.01')
-
-                    asset.current_price = new_price
-                except Exception:
-                    # fallback: keep current price unchanged
-                    pass
-
-                asset.save()
-
-                # Create order record
-                order = models.Order.objects.create(
-                    user=request.user,
-                    asset=asset,
-                    quantity=quantity,
-                    price=execution_price,
-                    side=side,
-                    status=models.Order.STATUS_COMPLETED,
-                    completed_at=timezone.now()
-                )
-
-                # Log to ledger
-                models.LedgerEntry.objects.create(
-                    user=request.user,
-                    asset=asset,
-                    change=total_cost if side == 'buy' else total_revenue,
-                    balance_after=request.user.balance,
-                    note=f"{side.upper()} {quantity} {asset.name} @ {execution_price}"
-                )
-
-                serializer = self.get_serializer(order)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            serializer = self.get_serializer(txn)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         except models.Asset.DoesNotExist:
             return Response({'error': 'Asset not found'}, status=status.HTTP_404_NOT_FOUND)
-        except models.Holding.DoesNotExist:
+        except models.Portfolio.DoesNotExist:
             return Response({'error': 'No holdings for this asset'}, status=status.HTTP_400_BAD_REQUEST)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def destroy(self, request, *args, **kwargs):
-        return Response({'error': 'Cannot delete orders'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': 'Cannot delete transactions'}, status=status.HTTP_403_FORBIDDEN)
 
     def update(self, request, *args, **kwargs):
-        return Response({'error': 'Cannot update orders'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'error': 'Cannot update transactions'}, status=status.HTTP_403_FORBIDDEN)
 
 
 class CompanyViewSet(viewsets.ModelViewSet):

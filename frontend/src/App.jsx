@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import Signup from "./pages/SignupPage";
 import Login from "./pages/LoginPage";
+import HomePage from "./pages/HomePage";
 import MarketDashboard from "./pages/MarketDashboard";
 import Portfolio from "./pages/Portfolio";
 import Leaderboard from "./pages/Leaderboard";
@@ -11,7 +12,7 @@ import "./App.css";
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
+  const [user,    setUser]    = useState(null);
   const [balance, setBalance] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -19,23 +20,15 @@ function App() {
     const token = localStorage.getItem("access_token");
     if (token) {
       setIsAuthenticated(true);
-      const userEmail = localStorage.getItem("user_email");
-      setUser(userEmail);
-      const savedBalance = localStorage.getItem("user_balance");
-      if (savedBalance) setBalance(parseFloat(savedBalance));
+      setUser(localStorage.getItem("user_email"));
+      const saved = localStorage.getItem("user_balance");
+      if (saved) setBalance(parseFloat(saved));
     }
     setLoading(false);
   }, []);
 
   const handleLogin = () => {
-    const userEmail = localStorage.getItem("user_email");
-    setUser(userEmail);
-    setIsAuthenticated(true);
-  };
-
-  const handleSignup = () => {
-    const userEmail = localStorage.getItem("user_email");
-    setUser(userEmail);
+    setUser(localStorage.getItem("user_email"));
     setIsAuthenticated(true);
   };
 
@@ -54,38 +47,45 @@ function App() {
     localStorage.setItem("user_balance", newBalance.toString());
   };
 
-  if (loading) {
-    return <div>Loading...</div>;
-  }
+  if (loading) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#050d12" }}>
+      <div className="px-loader">INITIALIZING SYSTEM...</div>
+    </div>
+  );
 
   return (
     <BrowserRouter>
       <div className="app-shell">
-        {isAuthenticated && <Navbar user={user} balance={balance} onLogout={handleLogout} />}
+        {/* Navbar only shown on authenticated inner pages */}
+        {isAuthenticated && (
+          <Navbar user={user} balance={balance} onLogout={handleLogout} />
+        )}
+
         <Routes>
-          <Route 
-            path="/signup" 
-            element={isAuthenticated ? <Navigate to="/market" /> : <Signup onSignup={handleSignup} />} 
+          {/* Public home page */}
+          <Route path="/"
+            element={<HomePage isAuthenticated={isAuthenticated} />}
           />
-          <Route 
-            path="/login" 
-            element={isAuthenticated ? <Navigate to="/market" /> : <Login onLogin={handleLogin} />} 
+          {/* Auth */}
+          <Route path="/login"
+            element={isAuthenticated ? <Navigate to="/market" /> : <Login onLogin={handleLogin} />}
           />
-          <Route 
-            path="/market" 
-            element={isAuthenticated ? <MarketDashboard onBalanceUpdate={updateBalance} /> : <Navigate to="/login" />} 
+          <Route path="/signup"
+            element={isAuthenticated ? <Navigate to="/market" /> : <Signup onSignup={handleLogin} />}
           />
-          <Route 
-            path="/portfolio" 
-            element={isAuthenticated ? <Portfolio onBalanceUpdate={updateBalance} /> : <Navigate to="/login" />} 
+          {/* Protected trading pages */}
+          <Route path="/market"
+            element={isAuthenticated ? <MarketDashboard onBalanceUpdate={updateBalance} /> : <Navigate to="/login" />}
           />
-          <Route 
-            path="/leaderboard" 
-            element={isAuthenticated ? <Leaderboard /> : <Navigate to="/login" />} 
+          <Route path="/portfolio"
+            element={isAuthenticated ? <Portfolio onBalanceUpdate={updateBalance} /> : <Navigate to="/login" />}
           />
-          <Route 
-            path="/" 
-            element={isAuthenticated ? <Navigate to="/market" /> : <Navigate to="/login" />} 
+          <Route path="/leaderboard"
+            element={isAuthenticated ? <Leaderboard /> : <Navigate to="/login" />}
+          />
+          {/* Fallback route */}
+          <Route path="*"
+            element={<Navigate to={isAuthenticated ? "/market" : "/"} />}
           />
         </Routes>
       </div>

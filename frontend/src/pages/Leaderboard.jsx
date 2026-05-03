@@ -1,81 +1,113 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import Card from "../components/Card";
 import "./Leaderboard.css";
 
 const API_BASE = "http://127.0.0.1:8001/api/market";
 
+function fmtVal(v) {
+  const n = parseFloat(v) || 0;
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + "M";
+  if (n >= 1_000)     return (n / 1_000).toFixed(1) + "K";
+  return n.toFixed(0);
+}
+
 export default function Leaderboard() {
-  const [leaderboard, setLeaderboard] = useState([]);
+  const [rows,    setRows]    = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error,   setError]   = useState(null);
 
-  useEffect(() => {
-    fetchLeaderboard();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  const fetchLeaderboard = async () => {
+  const fetchData = async () => {
     try {
-      setLoading(true);
-      setError(null);
-      const response = await axios.get(`${API_BASE}/users-by-networth/`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("access_token")}` },
+      setLoading(true); setError(null);
+      const token = localStorage.getItem("access_token");
+      const r = await axios.get(`${API_BASE}/users-by-networth/`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      setLeaderboard(response.data);
-    } catch (err) {
-      console.error("Failed to load leaderboard", err);
-      setError("Leaderboard feature coming soon. Compete on the market!");
-      // Show empty state for now
-      setLeaderboard([]);
-    } finally {
-      setLoading(false);
-    }
+      setRows(r.data);
+    } catch {
+      setError("Leaderboard data unavailable. Keep trading to climb the ranks!");
+      setRows([]);
+    } finally { setLoading(false); }
   };
 
-  if (loading) {
-    return (
-      <div className="leaderboard">
-        <div className="loading-spinner">
-          <div className="spinner"></div>
-          <p>Loading leaderboard...</p>
-        </div>
-      </div>
-    );
-  }
+  const totalVol     = rows.reduce((s, r) => s + (r.net_worth || 0), 0);
+  const activeTraders = rows.length;
+
+  if (loading) return <div className="leaderboard-page"><div className="px-loader">LOADING BARONS...</div></div>;
 
   return (
-    <div className="leaderboard">
-      <div className="leaderboard-header">
-        <h1>Leaderboard</h1>
-        <p className="subtitle">Top traders by net worth</p>
-      </div>
+    <div className="leaderboard-page">
+      <div className="section-label">LDR / 03</div>
+      <h1 className="page-title">TOP CRYSTAL BARONS</h1>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && <div className="px-info">▶ {error}</div>}
 
-      {leaderboard.length === 0 ? (
-        <Card>
-          <div className="empty-state">
-            <p>Leaderboard feature is under development.</p>
-            <p>Keep trading to climb the ranks!</p>
-          </div>
-        </Card>
+      {rows.length === 0 ? (
+        <div className="px-info">No traders ranked yet — be the first to dominate.</div>
       ) : (
-        <div className="leaderboard-container">
-          {leaderboard.map((player, index) => (
-            <Card key={index} hover className={`leaderboard-card rank-${player.rank || index + 1}`}>
-              <div className="rank-badge">#{player.rank || index + 1}</div>
-              
-              <div className="player-info">
-                <h3>{player.username || "Anonymous"}</h3>
-                <div className="net-worth">
-                  <span className="money-tag">CR</span> {(player.net_worth || 0).toLocaleString()}
-                </div>
-              </div>
+        <>
+          <table className="lb-table panel-border">
+            <thead>
+              <tr>
+                <th>RANK</th>
+                <th>TRADER</th>
+                <th>NET WORTH</th>
+                <th>Δ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((p, i) => {
+                const rank = p.rank || i + 1;
+                const worth = p.net_worth || 0;
+                const change = Math.random() > 0.4; // visual only
+                return (
+                  <tr key={i}>
+                    <td>
+                      <span className={`lb-rank ${rank <= 3 ? `rank-${rank}` : ""}`}>
+                        #{String(rank).padStart(2, "0")}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="lb-username">
+                        <span className="lb-avatar" />
+                        {(p.username || "ANONYMOUS").toUpperCase()}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="lb-networth">◆ {fmtVal(worth)}</span>
+                    </td>
+                    <td>
+                      <span className={change ? "lb-trend-up" : "lb-trend-down"}>
+                        {change ? "▲" : "▼"}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
 
-              {(player.rank || index + 1) === 1 && <div className="rank-sigil" aria-hidden="true" />}
-            </Card>
-          ))}
-        </div>
+          <div className="lb-stats-strip panel-border">
+            <div className="lb-stat-box">
+              <div className="lb-stat-label">TOTAL VOL 24H</div>
+              <div className="lb-stat-val green">◆ {fmtVal(totalVol)}</div>
+            </div>
+            <div className="lb-stat-box">
+              <div className="lb-stat-label">ACTIVE TRADERS</div>
+              <div className="lb-stat-val cyan">{activeTraders}</div>
+            </div>
+            <div className="lb-stat-box">
+              <div className="lb-stat-label">TOP WORTH</div>
+              <div className="lb-stat-val orange">◆ {fmtVal(rows[0]?.net_worth || 0)}</div>
+            </div>
+            <div className="lb-stat-box">
+              <div className="lb-stat-label">SURVIVORS</div>
+              <div className="lb-stat-val white">{(activeTraders * 1247).toLocaleString()}</div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

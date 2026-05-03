@@ -1,146 +1,115 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import Card from "../components/Card";
 import "./Portfolio.css";
 
 const API_BASE = "http://127.0.0.1:8001/api/market";
 
 export default function Portfolio({ onBalanceUpdate }) {
-  const [holdings, setHoldings] = useState([]);
+  const [holdings, setHoldings]         = useState([]);
   const [portfolioValue, setPortfolioValue] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState(null);
 
-  useEffect(() => {
-    fetchPortfolio();
-  }, []);
+  useEffect(() => { fetchPortfolio(); }, []);
 
   const fetchPortfolio = async () => {
     try {
-      setLoading(true);
-      setError(null);
+      setLoading(true); setError(null);
       const token = localStorage.getItem("access_token");
-      
-      if (!token) {
-        setError("Authentication required. Please log in.");
-        return;
-      }
-      
-      const [holdingsRes, valueRes] = await Promise.all([
-        axios.get(`${API_BASE}/holdings/`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        axios.get(`${API_BASE}/holdings/portfolio_value/`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
+      if (!token) { setError("Authentication required."); return; }
 
-      setHoldings(holdingsRes.data.results || holdingsRes.data);
-      setPortfolioValue(valueRes.data);
-      
-      // Update balance in navbar
-      if (onBalanceUpdate && valueRes.data) {
-        onBalanceUpdate(valueRes.data.cash_balance);
-      }
+      const [hRes, vRes] = await Promise.all([
+        axios.get(`${API_BASE}/portfolios/`,              { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API_BASE}/portfolios/portfolio_value/`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      setHoldings(hRes.data.results || hRes.data);
+      setPortfolioValue(vRes.data);
+      if (onBalanceUpdate && vRes.data) onBalanceUpdate(vRes.data.cash_balance);
     } catch (err) {
-      console.error("Failed to load portfolio", err);
       setError(err.response?.data?.error || err.message || "Failed to load portfolio");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
-  if (loading) {
-    return (
-      <div className="portfolio">
-        <div className="loading-spinner">
-          <div className="spinner"></div>
-          <p>Loading portfolio...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <div className="portfolio-page"><div className="px-loader">LOADING HOLDINGS...</div></div>;
 
   return (
-    <div className="portfolio">
-      <div className="portfolio-header">
-        <h1>Your Portfolio</h1>
-        <p className="subtitle">Manage your crystal-backed assets</p>
-      </div>
+    <div className="portfolio-page">
+      <div className="section-label">PRT / 02</div>
+      <h1 className="page-title">YOUR HOLDINGS</h1>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && <div className="px-error">▶ {error}</div>}
 
       {portfolioValue && (
-        <div className="portfolio-summary">
-          <Card>
-            <div className="summary-grid">
-              <div className="summary-item">
-                <div className="summary-label">Holdings Value</div>
-                <div className="summary-value">
-                  <span className="money-tag">CR</span> {portfolioValue.total_holdings_value.toFixed(2)}
-                </div>
-              </div>
-              <div className="summary-item">
-                <div className="summary-label">Cash Balance</div>
-                <div className="summary-value">
-                  <span className="money-tag">CR</span> {portfolioValue.cash_balance.toFixed(2)}
-                </div>
-              </div>
-              <div className="summary-item highlight">
-                <div className="summary-label">Net Worth</div>
-                <div className="summary-value">
-                  <span className="money-tag">CR</span> {portfolioValue.net_worth.toFixed(2)}
-                </div>
-              </div>
+        <div className="portfolio-summary panel-border">
+          <div className="summary-block">
+            <div className="summary-block-label">HOLDINGS VALUE</div>
+            <div className="summary-block-value sv-hold">
+              <span className="sym">◆</span>
+              {parseFloat(portfolioValue.total_portfolios_value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </div>
-          </Card>
+          </div>
+          <div className="summary-block">
+            <div className="summary-block-label">CASH BALANCE</div>
+            <div className="summary-block-value sv-cash">
+              <span className="sym">◆</span>
+              {parseFloat(portfolioValue.cash_balance).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+          <div className="summary-block highlight">
+            <div className="summary-block-label">NET WORTH</div>
+            <div className="summary-block-value sv-net">
+              <span className="sym">◆</span>
+              {parseFloat(portfolioValue.net_worth).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </div>
+          </div>
         </div>
       )}
 
-      <div className="holdings-section">
-        <h2>Your Holdings</h2>
-        
-        {holdings.length === 0 ? (
-          <Card>
-            <div className="empty-state">
-              <p>You don't own any assets yet.</p>
-              <p>Visit the Market to start trading!</p>
-            </div>
-          </Card>
-        ) : (
-          <div className="holdings-list">
-            {holdings.map((holding) => (
-              <Card key={holding.id} hover className="holding-card">
-                <div className="holding-header">
-                  <h3>{holding.asset_name}</h3>
-                  <span className="quantity-badge">{holding.quantity}</span>
-                </div>
-                
-                <div className="holding-details">
-                  <div className="detail-item">
-                    <span className="label">Current Price:</span>
-                    <span className="value"><span className="money-tag">CR</span> {parseFloat(holding.asset_price).toFixed(2)}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">Avg Buy Price:</span>
-                    <span className="value"><span className="money-tag">CR</span> {parseFloat(holding.avg_price).toFixed(2)}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">Total Value:</span>
-                    <span className="value highlight"><span className="money-tag">CR</span> {parseFloat(holding.value).toFixed(2)}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">Profit/Loss:</span>
-                    <span className={`value ${parseFloat(holding.value) - (holding.quantity * holding.avg_price) > 0 ? "profit" : "loss"}`}>
-                      <span className="money-tag">CR</span> {(parseFloat(holding.value) - (holding.quantity * holding.avg_price)).toFixed(2)}
+      {holdings.length === 0 ? (
+        <div className="portfolio-empty">
+          <span className="portfolio-empty-icon">◆</span>
+          <div className="portfolio-empty-title">NO ACTIVE POSITIONS</div>
+          <div className="portfolio-empty-sub">Visit the Market to acquire assets and build your syndicate.</div>
+        </div>
+      ) : (
+        <table className="holdings-table panel-border">
+          <thead>
+            <tr>
+              <th>ASSET</th>
+              <th>QTY</th>
+              <th>CURRENT PRICE</th>
+              <th>AVG BUY</th>
+              <th>TOTAL VALUE</th>
+              <th>P / L</th>
+            </tr>
+          </thead>
+          <tbody>
+            {holdings.map(h => {
+              const qty   = parseFloat(h.quantity)      || 0;
+              const cur   = parseFloat(h.asset_price)   || 0;
+              const avg   = parseFloat(h.avg_buy_price) || 0;
+              const val   = qty * cur;
+              const cost  = qty * avg;
+              const pnl   = val - cost;
+              const isPos = pnl >= 0;
+              return (
+                <tr key={h.id}>
+                  <td><span className="holding-name">{(h.asset_name || "UNKNOWN").toUpperCase()}</span></td>
+                  <td><span className="holding-qty">{qty.toLocaleString()}</span></td>
+                  <td><span className="holding-price">◆ {cur.toFixed(2)}</span></td>
+                  <td><span className="holding-avg">◆ {avg.toFixed(2)}</span></td>
+                  <td><span className="holding-value">◆ {val.toFixed(2)}</span></td>
+                  <td>
+                    <span className={isPos ? "holding-pnl-pos" : "holding-pnl-neg"}>
+                      {isPos ? "▲" : "▼"} ◆ {Math.abs(pnl).toFixed(2)}
                     </span>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

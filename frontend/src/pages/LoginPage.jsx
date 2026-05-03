@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
-import Button from "../components/Button";
 import "./AuthPage.css";
 
 const API_BASE = "http://127.0.0.1:8001/api/auth";
@@ -20,108 +19,69 @@ export default function Login({ onLogin }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validation
-    if (!form.email || !form.password) {
-      setError("Email and password are required");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-    
+    if (!form.email || !form.password) { setError("All fields required"); return; }
+    setLoading(true); setError("");
     try {
-      const response = await axios.post(`${API_BASE}/login/`, form);
-      
-      if (!response.data.access) {
-        throw new Error("No access token received");
-      }
-      
-      localStorage.setItem("access_token", response.data.access);
-      if (response.data.refresh) {
-        localStorage.setItem("refresh_token", response.data.refresh);
-      }
+      const res = await axios.post(`${API_BASE}/login/`, form);
+      if (!res.data.access) throw new Error("No token");
+      localStorage.setItem("access_token", res.data.access);
+      localStorage.setItem("refresh_token", res.data.refresh || "");
       localStorage.setItem("user_email", form.email);
-      
       if (onLogin) onLogin();
       navigate("/market");
     } catch (err) {
-      const errorMsg = err.response?.data?.error || 
-                       err.response?.data?.detail ||
-                       err.message ||
-                       "Login failed. Please try again.";
-      setError(errorMsg);
-      console.error("Login error:", err);
-    } finally {
-      setLoading(false);
-    }
+      setError(err.response?.data?.error || err.response?.data?.detail || "Access denied. Check credentials.");
+    } finally { setLoading(false); }
   };
 
   return (
     <div className="auth-page">
-      <div className="auth-container">
-        <div className="auth-logo">
-          <span className="logo-mark" aria-hidden="true" />
-          <h1>CRYTX</h1>
+      <div className="auth-wrap">
+        <span className="auth-crystal">◆</span>
+        <div className="auth-headline">
+          <span className="line1">JACK IN.</span>
+          <span className="line2">SURVIVE.</span>
         </div>
+        <p className="auth-sub">
+          The wasteland doesn't wait. Access your terminal<br />and step onto the exchange floor.
+        </p>
 
-        <h2>Welcome Back, Trader</h2>
-        <p className="auth-subtitle">Trade crystals. Build wealth. Dominate markets.</p>
+        <div className="auth-card">
+          <form onSubmit={handleSubmit} className="auth-form">
+            {error && <div className="auth-error">▶ {error}</div>}
 
-        <form onSubmit={handleSubmit} className="auth-form">
-          {error && <div className="error-message">{error}</div>}
+            <div className="auth-form-group">
+              <label className="auth-form-label" htmlFor="email">HANDLE_EMAIL</label>
+              <input
+                id="email" type="email" name="email"
+                className="auth-form-input"
+                placeholder="trader@wasteland.net"
+                value={form.email} onChange={handleChange} required
+                autoComplete="email"
+              />
+            </div>
 
-          <div className="form-group">
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              name="email"
-              placeholder="your@email.com"
-              value={form.email}
-              onChange={handleChange}
-              required
-            />
-          </div>
+            <div className="auth-form-group">
+              <label className="auth-form-label" htmlFor="password">ACCESS_CODE</label>
+              <input
+                id="password" type="password" name="password"
+                className="auth-form-input"
+                placeholder="••••••••"
+                value={form.password} onChange={handleChange} required
+                autoComplete="current-password"
+              />
+            </div>
 
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              name="password"
-              placeholder="••••••••"
-              value={form.password}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <Button
-            variant="primary"
-            size="lg"
-            fullWidth
-            type="submit"
-            disabled={loading}
-          >
-            {loading ? "Logging in..." : "Login"}
-          </Button>
-        </form>
+            <button type="submit" className="auth-submit-btn" disabled={loading}>
+              {loading ? "CONNECTING..." : "► ENTER MARKET"}
+            </button>
+          </form>
+        </div>
 
         <div className="auth-footer">
-          <p>
-            Don't have an account?{" "}
-            <Link to="/signup" className="auth-link">
-              Sign up here
-            </Link>
-          </p>
+          NO ACCOUNT?&nbsp;
+          <Link to="/signup" className="auth-footer-link">CLAIM YOUR HANDLE ►</Link>
         </div>
-      </div>
-
-      <div className="auth-decoration">
-        <div className="pixel-crystal pixel-crystal-1" />
-        <div className="pixel-crystal pixel-crystal-2" />
-        <div className="pixel-crystal pixel-crystal-3" />
       </div>
     </div>
   );
