@@ -1,0 +1,166 @@
+.leaderboard {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--spacing-xl) var(--spacing-lg);
+  position: relative;
+  z-index: 1;
+}
+
+.leaderboard-header {
+  text-align: center;
+  margin-bottom: var(--spacing-2xl);
+  padding: var(--spacing-lg);
+  border: 2px solid rgba(121, 242, 255, 0.16);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, rgba(9, 20, 38, 0.95), rgba(8, 18, 32, 0.84));
+  box-shadow: var(--shadow-md);
+  clip-path: polygon(0 12px, 12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px));
+}
+
+.leaderboard-header h1 {
+  font-size: var(--font-size-3xl);
+  margin-bottom: var(--spacing-md);
+  background: linear-gradient(135deg, #7df9ff 0%, #ffd86b 50%, #ff8fd1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 0.1em;
+}
+
+.money-tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #07111f;
+  background: linear-gradient(135deg, #7df9ff 0%, #ffd86b 100%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.leaderboard-container {
+  display: grid;
+  gap: var(--spacing-lg);
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.leaderboard-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg);
+  min-height: 100px;
+  overflow: visible;
+}
+
+.leaderboard-card.rank-1 {
+  background: linear-gradient(135deg, rgba(125, 249, 255, 0.18) 0%, rgba(255, 216, 107, 0.18) 100%);
+  border: 2px solid rgba(255, 216, 107, 0.7);
+  box-shadow: 0 0 30px rgba(255, 216, 107, 0.18), var(--shadow-md);
+}
+
+.leaderboard-card.rank-2 {
+  background: linear-gradient(135deg, rgba(121, 242, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
+  border: 2px solid rgba(192, 192, 192, 0.5);
+}
+
+.leaderboard-card.rank-3 {
+  background: linear-gradient(135deg, rgba(255, 216, 107, 0.12) 0%, rgba(255, 107, 122, 0.08) 100%);
+  border: 2px solid rgba(205, 127, 50, 0.65);
+}
+
+.rank-badge {
+  font-size: var(--font-size-2xl);
+  font-weight: 900;
+  background: linear-gradient(135deg, #7df9ff 0%, #ffd86b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  min-width: 60px;
+  text-align: center;
+  font-family: var(--heading);
+}
+
+.player-info {
+  flex: 1;
+}
+
+.player-info h3 {
+  font-size: var(--font-size-xl);
+  margin: 0 0 var(--spacing-sm) 0;
+  color: var(--text-h);
+}
+
+.net-worth {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  background: linear-gradient(135deg, #7df9ff 0%, #ffd86b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.rank-sigil {
+  position: absolute;
+  top: -15px;
+  right: 20px;
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(180deg, #ffd86b, #7df9ff);
+  clip-path: polygon(50% 0%, 61% 22%, 84% 22%, 67% 38%, 74% 62%, 50% 48%, 26% 62%, 33% 38%, 16% 22%, 39% 22%);
+  animation: bounce 2s infinite;
+  filter: drop-shadow(0 6px 12px rgba(255, 216, 107, 0.2));
+}
+
+.loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(121, 242, 255, 0.12);
+  border-top-color: var(--primary-orange);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@media (max-width: 768px) {
+  .leaderboard-header h1 {
+    font-size: var(--font-size-2xl);
+  }
+
+  .leaderboard-card {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .leaderboard-card.rank-1,
+  .leaderboard-card.rank-2,
+  .leaderboard-card.rank-3 {
+    align-items: center;
+  }
+}
