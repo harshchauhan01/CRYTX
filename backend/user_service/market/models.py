@@ -13,6 +13,7 @@ class AssetCategory(models.Model):
 class Asset(models.Model):
     name = models.CharField(max_length=150)
     category = models.ForeignKey(AssetCategory, on_delete=models.PROTECT, related_name='assets')
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='issued_assets', null=True, blank=True)
     base_price = models.DecimalField(max_digits=20, decimal_places=2)
     current_price = models.DecimalField(max_digits=20, decimal_places=2)
     total_supply = models.DecimalField(max_digits=20, decimal_places=4, default=0)

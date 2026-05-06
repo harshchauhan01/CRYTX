@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
-import { ResponsiveContainer, LineChart, Line, YAxis } from "recharts";
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { soundFX } from "../utils/soundFX";
+import { toast } from "../components/Toast";
 import "./MarketDashboard.css";
 
 const API_BASE = "http://127.0.0.1:8001/api/market";
-const ICONS = { Food:"🌾", Air:"💨", Medical:"💊", Energy:"⚡", Water:"💧", Ammo:"🎯", default:"◆" };
+const ICONS = { Food:"🌾", Air:"💨", Medical:"💊", Energy:"⚡", Water:"💧", Ammo:"🎯", default:"◈" };
 
 function fmtVal(v) {
   const n = parseFloat(v)||0;
@@ -31,11 +32,29 @@ export default function MarketDashboard({ onBalanceUpdate }) {
   const [cash,      setCash]      = useState(null);
   const [ordersQ,   setOrdersQ]   = useState(0);
   const [loading,   setLoading]   = useState(true);
-  const [tradeMsg,  setTradeMsg]  = useState(null);
-  const [tradeErr,  setTradeErr]  = useState(null);
   const [executing, setExecuting] = useState(false);
 
   useEffect(() => { fetchAll(); }, []);
+
+  useEffect(() => {
+    const ws = new WebSocket('ws://127.0.0.1:8001/ws/market/');
+    
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'price_update') {
+          const payload = data.data;
+          setAssets(prev => prev.map(a => 
+            a.id === payload.asset_id ? { ...a, current_price: payload.price } : a
+          ));
+        }
+      } catch (err) {
+        console.error("WS parse error", err);
+      }
+    };
+
+    return () => ws.close();
+  }, []);
 
   useEffect(() => {
     if (!selected) return;
@@ -53,7 +72,7 @@ export default function MarketDashboard({ onBalanceUpdate }) {
   const fetchAll = async () => {
     const token = localStorage.getItem("access_token");
     try {
-      setLoading(true);
+      if (assets.length === 0) setLoading(true);
       const [ar, pr, vr] = await Promise.all([
         axios.get(`${API_BASE}/assets/`),
         axios.get(`${API_BASE}/portfolios/`, { headers: { Authorization: `Bearer ${token}` } }),
@@ -80,32 +99,34 @@ export default function MarketDashboard({ onBalanceUpdate }) {
 
   const openPanel = (asset, s="buy") => {
     soundFX.blip();
-    setSelected(asset); setSide(s); setQty(1); setTradeMsg(null); setTradeErr(null); setHistory([]);
+    setSelected(asset); setSide(s); setQty(1); setHistory([]);
   };
 
   const changeQty = (delta) => {
     soundFX.blip();
-    setQty(q => Math.max(0.1, parseFloat((parseFloat(q) + delta).toFixed(2))));
+    setQty(q => {
+      const current = parseFloat(q) || 0;
+      return Math.max(0.1, parseFloat((current + delta).toFixed(2)));
+    });
   };
 
   const executeTrade = async () => {
-    if (!selected || qty <= 0) return;
-    setExecuting(true); setTradeMsg(null); setTradeErr(null);
+    const parsedQty = parseFloat(qty);
+    if (!selected || !parsedQty || parsedQty <= 0) return;
+    setExecuting(true);
     try {
       const token = localStorage.getItem("access_token");
       await axios.post(
         `${API_BASE}/transactions/`,
-        { asset_id: selected.id, quantity: qty, side },
+        { asset_id: selected.id, quantity: parsedQty, side },
         { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() } }
       );
-      setTradeMsg(`${side.toUpperCase()} ORDER EXECUTED ✔`);
+      toast(`${side.toUpperCase()} ORDER EXECUTED`, 'success');
       setOrdersQ(q => q+1);
       await fetchAll();
       setSelected(asst => assets.find(a => a.id === asst?.id) || asst);
-      soundFX.execute();
     } catch(err) {
-      soundFX.error();
-      setTradeErr(err.response?.data?.error || err.response?.data?.detail || "Trade failed");
+      toast(err.response?.data?.error || err.response?.data?.detail || "Trade failed", 'error');
     } finally { setExecuting(false); }
   };
 
@@ -138,9 +159,9 @@ export default function MarketDashboard({ onBalanceUpdate }) {
             const up=pct>=0;
             return(
               <span key={i} className="ex-tick-item">
-                {ICONS[a.category_name]||"◆"}
+                {ICONS[a.category_name]||"◈"}
                 <span className="ex-tick-name">{a.name.substring(0,4).toUpperCase()}</span>
-                <span className="ex-tick-price">◆{parseFloat(a.current_price).toFixed(2)}</span>
+                <span className="ex-tick-price">${parseFloat(a.current_price).toFixed(2)}</span>
                 <span className={up?"ex-tick-up":"ex-tick-down"}>{up?"▲":"▼"}{Math.abs(pct).toFixed(1)}%</span>
                 <span style={{color:"var(--border)",margin:"0 8px"}}>|</span>
               </span>
@@ -153,7 +174,7 @@ export default function MarketDashboard({ onBalanceUpdate }) {
       <div className="exchange-stats">
         <div className="ex-stat-box">
           <div className="ex-stat-label">CRYSTAL WALLET</div>
-          <div className="ex-stat-val">◆ {cash!=null ? fmtVal(cash) : "—"}</div>
+          <div className="ex-stat-val">${cash!=null ? fmtVal(cash) : "—"}</div>
         </div>
         <div className="ex-stat-box">
           <div className="ex-stat-label">VAULT HOLDINGS</div>
@@ -192,14 +213,14 @@ export default function MarketDashboard({ onBalanceUpdate }) {
                     onClick={()=>openPanel(asset, side)}>
                     <td>
                       <div className="at-asset-wrap">
-                        <span className="at-icon">{ICONS[asset.category_name]||"◆"}</span>
+                        <span className="at-icon">{ICONS[asset.category_name]||"◈"}</span>
                         <div>
                           <div className="at-name">{(asset.category_name||"ASSET").toUpperCase()}</div>
                           <div className="at-sub">{asset.name}</div>
                         </div>
                       </div>
                     </td>
-                    <td><span className="at-price">◆{parseFloat(asset.current_price).toFixed(2)}</span></td>
+                    <td><span className="at-price">${parseFloat(asset.current_price).toFixed(2)}</span></td>
                     <td>
                       <span className={up?"at-chg-up":"at-chg-down"}>
                         {up?"▲":"▼"} {Math.abs(pct).toFixed(1)}%
@@ -234,19 +255,41 @@ export default function MarketDashboard({ onBalanceUpdate }) {
                   <div className="tp-name">{(selAsset.category_name||"ASSET").toUpperCase()}</div>
                   <div className="tp-sub">{selAsset.name}</div>
                 </div>
-                <div className="tp-icon">{ICONS[selAsset.category_name]||"◆"}</div>
+                <div className="tp-icon">{ICONS[selAsset.category_name]||"◈"}</div>
               </div>
 
               <div className="tp-body">
                 {/* Last price & Chart */}
                 <div className="tp-price-block">
                   <div className="tp-price-label">LAST PRICE</div>
-                  <div className="tp-price-val">◆ {parseFloat(selAsset.current_price).toFixed(2)}</div>
-                  <div className="tp-chart-wrap" style={{ height: 120, marginTop: 16, borderBottom: "1px solid var(--border)", paddingBottom: 16 }}>
+                  <div className="tp-price-val">${parseFloat(selAsset.current_price).toFixed(2)}</div>
+                  <div className="tp-chart-wrap" style={{ height: 200, marginTop: 16, borderBottom: "1px solid var(--border)", paddingBottom: 16 }}>
                     {history.length > 1 ? (
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={history}>
-                          <YAxis domain={['dataMin', 'dataMax']} hide />
+                        <LineChart data={history} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
+                          <XAxis 
+                            dataKey="timestamp" 
+                            tickFormatter={(t) => new Date(t).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} 
+                            stroke="var(--border)" 
+                            fontSize={10} 
+                            tickMargin={10} 
+                            minTickGap={20}
+                          />
+                          <YAxis 
+                            domain={['auto', 'auto']} 
+                            stroke="var(--border)" 
+                            fontSize={10} 
+                            tickFormatter={(v) => `$${v}`} 
+                            width={60} 
+                          />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#0a0f14', border: '1px solid var(--border)', fontSize: '12px', color: 'var(--cyan)' }}
+                            itemStyle={{ color: 'var(--cyan)' }}
+                            labelStyle={{ color: 'var(--white)', marginBottom: '5px' }}
+                            formatter={(value) => [`$${parseFloat(value).toFixed(2)}`, 'Price']}
+                            labelFormatter={(label) => new Date(label).toLocaleTimeString()}
+                          />
                           <Line type="stepAfter" dataKey="price" stroke="var(--cyan)" strokeWidth={2} dot={false} isAnimationActive={false} />
                         </LineChart>
                       </ResponsiveContainer>
@@ -257,7 +300,7 @@ export default function MarketDashboard({ onBalanceUpdate }) {
                 </div>
 
                 {/* Buy / Sell toggle */}
-                <div>
+                <div style={{marginTop: 16}}>
                   <div className="tp-price-label" style={{marginBottom:8}}>SIDE</div>
                   <div className="tp-side-toggle">
                     <button className={`tp-side-btn ${side==="buy"?"buy-active":""}`} onMouseEnter={()=>soundFX.blip()} onClick={()=>setSide("buy")}>► BUY</button>
@@ -274,7 +317,8 @@ export default function MarketDashboard({ onBalanceUpdate }) {
                       type="number" min="0.1" step="0.1"
                       className="qty-input"
                       value={qty}
-                      onChange={e=>setQty(Math.max(0.1, parseFloat(e.target.value)||0))}
+                      onChange={e=>setQty(e.target.value)}
+                      onBlur={e=>setQty(Math.max(0.1, parseFloat(e.target.value)||0.1))}
                     />
                     <button className="qty-inc" onClick={()=>changeQty(1)}>+</button>
                   </div>
@@ -283,12 +327,8 @@ export default function MarketDashboard({ onBalanceUpdate }) {
                 {/* Total */}
                 <div className="tp-total-row">
                   <span className="tp-total-label">TOTAL</span>
-                  <span className="tp-total-val">◆ {cost.toFixed(2)}</span>
+                  <span className="tp-total-val">${cost.toFixed(2)}</span>
                 </div>
-
-                {/* Messages */}
-                {tradeMsg && <div className="tp-msg-ok">✔ {tradeMsg}</div>}
-                {tradeErr && <div className="tp-msg-err">▶ {tradeErr}</div>}
 
                 {/* Execute */}
                 <button
@@ -304,7 +344,8 @@ export default function MarketDashboard({ onBalanceUpdate }) {
                   <div style={{
                     border:"1px solid var(--red)", color:"var(--red)",
                     padding:"8px 12px", fontFamily:"var(--font-pixel)",
-                    fontSize:8, letterSpacing:2, animation:"blink 1s step-end infinite"
+                    fontSize:8, letterSpacing:2, animation:"blink 1s step-end infinite",
+                    marginTop: 16
                   }}>
                     ⚠ CIRCUIT BREAKER TRIPPED — TRADING HALTED
                   </div>

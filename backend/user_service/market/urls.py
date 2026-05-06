@@ -12,5 +12,6 @@ router.register(r'events', views.MarketEventViewSet, basename='marketevent')
 router.register(r'ledger', views.LedgerEntryViewSet, basename='ledgerentry')
 
 urlpatterns = [
+    path('users-by-networth/', views.users_by_networth, name='users-by-networth'),
     path('', include(router.urls)),
 ]

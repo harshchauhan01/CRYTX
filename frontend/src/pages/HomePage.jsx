@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from "recharts";
 import "./HomePage.css";
 
 const API_BASE = "http://127.0.0.1:8001/api/market";
 
-const CATEGORY_ICONS = { Food:"🌾", Air:"💨", Medical:"💊", Energy:"⚡", Water:"💧", Ammo:"🎯", default:"◆" };
+const CATEGORY_ICONS = { Food:"🌾", Air:"💨", Medical:"💊", Energy:"⚡", Water:"💧", Ammo:"🎯", default:"◈" };
 
 function fmtVal(v) {
   const n = parseFloat(v)||0;
@@ -14,25 +15,39 @@ function fmtVal(v) {
   return n.toFixed(0);
 }
 
-function buildBars(current, base, count=22) {
-  const bars=[]; let p=parseFloat(base)||parseFloat(current)||100;
-  for(let i=0;i<count;i++){p*=(1+(Math.random()-0.49)*0.04); bars.push(Math.max(p,1));}
-  bars[count-1]=parseFloat(current)||p;
-  const mx=Math.max(...bars);
-  return bars.map(b=>Math.round((b/mx)*100));
+function buildBars(current, base, count=20) {
+  const data=[]; let p=parseFloat(base)||parseFloat(current)||100;
+  for(let i=0;i<count-1;i++){
+    p*=(1+(Math.random()-0.49)*0.04);
+    data.push({ time: i, price: Math.max(p,1) });
+  }
+  data.push({ time: count-1, price: parseFloat(current)||p });
+  return data;
 }
 
 function MiniChart({current,base,isUp}){
-  const bars=useRef(buildBars(current,base, 15));
+  const [data] = useState(() => buildBars(current, base));
+  const color = isUp ? "var(--green)" : "var(--red)";
   return(
     <div className="hm-chart">
-      {bars.current.map((h,i)=>(
-        <div key={i} className="hm-bar" style={{
-          height:`${Math.max(h, 10)}%`,
-          background: isUp ? 'var(--green)' : 'var(--red)',
-          opacity: 0.5 + (h/100)*0.5
-        }}/>
-      ))}
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data}>
+          <defs>
+            <linearGradient id={`grad_${color}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={color} stopOpacity={0.4}/>
+              <stop offset="95%" stopColor={color} stopOpacity={0}/>
+            </linearGradient>
+          </defs>
+          <YAxis domain={['dataMin', 'dataMax']} hide />
+          <Tooltip 
+            contentStyle={{ backgroundColor: '#0a0f14', border: '1px solid var(--border)', fontSize: '10px', color: 'var(--cyan)' }}
+            itemStyle={{ color: color }}
+            labelStyle={{ display: 'none' }}
+            formatter={(value) => [`$${value.toFixed(2)}`, 'Price']}
+          />
+          <Area type="monotone" dataKey="price" stroke={color} fillOpacity={1} fill={`url(#grad_${color})`} isAnimationActive={false} />
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -51,9 +66,9 @@ function Ticker({assets}){
           const sym=a.name.substring(0,4).toUpperCase();
           return(
             <span key={i} className="htick-item">
-              {CATEGORY_ICONS[a.category_name]||"◆"}
+              {CATEGORY_ICONS[a.category_name]||"◈"}
               <span className="htick-name">{sym}</span>
-              <span className="htick-price">◆ {parseFloat(a.current_price).toFixed(2)}</span>
+              <span className="htick-price">${parseFloat(a.current_price).toFixed(2)}</span>
               <span className={up?"htick-up":"htick-down"}>{up?"▲":"▼"} {Math.abs(pct).toFixed(1)}%</span>
               <span className="htick-sep">|</span>
             </span>
@@ -146,7 +161,7 @@ export default function HomePage({ isAuthenticated }) {
         <div className="hero-stats-inner">
           <div><div className="hstat-label">BLOCK</div><div className="hstat-val">{blockNum}</div></div>
           <div><div className="hstat-label">TRADERS</div><div className="hstat-val">{totalTraders.toLocaleString()}</div></div>
-          <div><div className="hstat-label">VOLUME</div><div className="hstat-val">◆ {fmtVal(totalVol)}</div></div>
+          <div><div className="hstat-label">VOLUME</div><div className="hstat-val">${fmtVal(totalVol)}</div></div>
           <div><div className="hstat-label">ASSETS</div><div className="hstat-val">{assets.length}</div></div>
         </div>
       </div>
@@ -165,17 +180,17 @@ export default function HomePage({ isAuthenticated }) {
               :0;
             const isUp=pct>=0;
             return(
-              <div key={asset.id} className="hm-card">
+              <div key={asset.id} className="hm-card panel-border">
                 <div className="hm-card-head">
                   <div>
                     <div className="hm-cat">{(asset.category_name||"ASSET").toUpperCase()}</div>
                     <div className="hm-name">{asset.name}</div>
                   </div>
-                  <div className="hm-icon">{CATEGORY_ICONS[asset.category_name]||"◆"}</div>
+                  <div className="hm-icon">{CATEGORY_ICONS[asset.category_name]||"◈"}</div>
                 </div>
                 <div className="hm-price-label">PRICE</div>
                 <div className="hm-price-row">
-                  <div className="hm-price"><span className="psym">◆</span>{parseFloat(asset.current_price).toFixed(2)}</div>
+                  <div className="hm-price"><span className="psym">$</span>{parseFloat(asset.current_price).toFixed(2)}</div>
                   <span className={isUp?"hm-chg-up":"hm-chg-down"}>
                     {isUp?"▲":"▼"} {Math.abs(pct).toFixed(2)}%
                   </span>
@@ -196,7 +211,7 @@ export default function HomePage({ isAuthenticated }) {
           <div className="how-card">
             <div className="how-num">01</div>
             <div className="how-title">JACK IN</div>
-            <p className="how-desc">Create your trader handle and claim your free starter wallet of 10,000 crystals. No real money, pure strategy.</p>
+            <p className="how-desc">Create your trader handle and claim your free starter wallet of $10,000. No real money, pure strategy.</p>
           </div>
           <div className="how-card">
             <div className="how-num">02</div>
@@ -229,7 +244,7 @@ export default function HomePage({ isAuthenticated }) {
                     <tr key={i}>
                       <td><span className={`hlb-rank${rank===1?" r1":rank===2?" r2":rank===3?" r3":""}`}>#{String(rank).padStart(2,"0")}</span></td>
                       <td><span className="hlb-av"/><span className="hlb-name">{(p.username||"ANON").toUpperCase()}</span></td>
-                      <td><span className="hlb-nw">◆ {fmtVal(p.net_worth||0)}</span></td>
+                      <td><span className="hlb-nw">${fmtVal(p.net_worth||0)}</span></td>
                       <td><span className={up?"hlb-up":"hlb-dn"}>{up?"▲":"▼"}</span></td>
                     </tr>
                   );
@@ -237,7 +252,7 @@ export default function HomePage({ isAuthenticated }) {
               </tbody>
             </table>
             <div className="home-lb-stats">
-              <div className="hlb-stat"><div className="hlb-stat-label">TOTAL VOL 24H</div><div className="hlb-stat-val g">◆ {fmtVal(leaders.reduce((s,r)=>s+(r.net_worth||0),0))}</div></div>
+              <div className="hlb-stat"><div className="hlb-stat-label">TOTAL VOL 24H</div><div className="hlb-stat-val g">${fmtVal(leaders.reduce((s,r)=>s+(r.net_worth||0),0))}</div></div>
               <div className="hlb-stat"><div className="hlb-stat-label">ACTIVE CARDS</div><div className="hlb-stat-val c">{assets.length * 12}</div></div>
               <div className="hlb-stat"><div className="hlb-stat-label">COMPANIES</div><div className="hlb-stat-val o">2,317</div></div>
               <div className="hlb-stat"><div className="hlb-stat-label">SURVIVORS</div><div className="hlb-stat-val w">{totalTraders.toLocaleString()}</div></div>
@@ -253,7 +268,7 @@ export default function HomePage({ isAuthenticated }) {
         <div className="home-cta-inner">
           <div>
             <div className="home-cta-title">READY TO ENTER THE EXCHANGE?</div>
-            <div className="home-cta-sub">◆ FREE STARTER WALLET · 10,000 · CRYSTALS ON ENTRY</div>
+            <div className="home-cta-sub">◈ FREE STARTER WALLET · $10,000 · CREDITS ON ENTRY</div>
           </div>
           <Link to={isAuthenticated?"/market":"/signup"} className="px-btn px-btn-cyan" style={{fontSize:10,letterSpacing:2,padding:"14px 28px"}}>
             ► {isAuthenticated?"OPEN EXCHANGE FLOOR":"CLAIM YOUR HANDLE"}
@@ -264,7 +279,7 @@ export default function HomePage({ isAuthenticated }) {
       {/* ── Footer ── */}
       <div style={{borderTop:"1px solid var(--border)"}}>
         <div className="home-footer">
-          <div className="home-footer-logo">◆ CRYTX</div>
+          <div className="home-footer-logo">◈ CRYTX</div>
           <div className="home-footer-note">CRYSTAL EXCHANGE · YEAR 2147 · ALL RIGHTS BURNED</div>
         </div>
       </div>

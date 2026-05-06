@@ -102,3 +102,22 @@
 .lb-stat-val.cyan   { color: var(--cyan); text-shadow: var(--glow-cyan); }
 .lb-stat-val.orange { color: var(--orange); text-shadow: var(--glow-orange); }
 .lb-stat-val.white  { color: var(--white); }
+
+@media (max-width: 768px) {
+  .leaderboard-page { padding: 24px 12px 64px; }
+  .lb-table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+  .lb-stats-strip {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .lb-stats-strip {
+    grid-template-columns: 1fr;
+  }
+}

@@ -7,6 +7,7 @@ import MarketDashboard from "./pages/MarketDashboard";
 import Portfolio from "./pages/Portfolio";
 import Leaderboard from "./pages/Leaderboard";
 import Navbar from "./components/Navbar";
+import { ToastContainer } from "./components/Toast";
 import "./globals.css";
 import "./App.css";
 
@@ -56,6 +57,7 @@ function App() {
   return (
     <BrowserRouter>
       <div className="app-shell">
+        <ToastContainer />
         {/* Navbar only shown on authenticated inner pages */}
         {isAuthenticated && (
           <Navbar user={user} balance={balance} onLogout={handleLogout} />

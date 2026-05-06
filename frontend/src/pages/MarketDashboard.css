@@ -166,7 +166,15 @@
 .tp-msg-err { font-family: var(--font-pixel); font-size: 9px; letter-spacing: 1px; color: var(--red); padding: 8px 0; }
 
 @media(max-width:860px) {
-  .exchange-body { grid-template-columns: 1fr; }
-  .exchange-right { border-top: 1px solid var(--border); max-height: 500px; }
+  .exchange-body { grid-template-columns: 1fr; overflow-y: auto; }
+  .exchange-left { border-right: none; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .asset-table { min-width: 600px; }
+  .exchange-right { border-top: 1px solid var(--border); max-height: none; }
   .exchange-stats { grid-template-columns: 1fr 1fr; }
+}
+
+@media(max-width:500px) {
+  .exchange-header { padding: 16px 20px; }
+  .exchange-stats { grid-template-columns: 1fr; }
+  .tp-side-toggle { grid-template-columns: 1fr; }
 }

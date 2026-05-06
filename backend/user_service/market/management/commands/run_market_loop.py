@@ -3,6 +3,7 @@ import logging
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from market.tasks import price_tick_task, apply_events_task
+from market.ai_trader import ai_trader_tick
 
 logger = logging.getLogger(__name__)
 
@@ -14,9 +15,11 @@ class Command(BaseCommand):
         
         TICK_INTERVAL = 10
         EVENT_INTERVAL = 30
+        AI_INTERVAL = 5
         
         last_tick = 0
         last_event = 0
+        last_ai = 0
         
         try:
             while True:
@@ -33,6 +36,11 @@ class Command(BaseCommand):
                     self.stdout.write(f"[{timezone.now().isoformat()}] Running apply_events_task...")
                     apply_events_task()
                     last_event = now
+                    
+                # Run AI trader tick every 5s
+                if now - last_ai >= AI_INTERVAL:
+                    ai_trader_tick()
+                    last_ai = now
                 
                 # Sleep a bit to prevent CPU spinning
                 time.sleep(1)

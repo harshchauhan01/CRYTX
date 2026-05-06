@@ -57,11 +57,35 @@ body {
     repeating-linear-gradient(
       0deg,
       var(--scanline) 0px,
-      var(--scanline) 1px,
-      transparent 1px,
+      var(--scanline) 2px,
+      transparent 2px,
       transparent 4px
     );
   background-attachment: fixed;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(circle, transparent 50%, rgba(1, 5, 10, 0.8) 100%);
+  pointer-events: none;
+  z-index: 9998;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(0deg, rgba(0, 245, 228, 0.03) 0px, rgba(0, 245, 228, 0.03) 1px, transparent 1px, transparent 2px);
+  pointer-events: none;
+  z-index: 9997;
+  animation: scanline 10s linear infinite;
+}
+
+@keyframes scanline {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(100vh); }
 }
 
 /* ─── Scrollbar ─── */

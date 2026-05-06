@@ -133,6 +133,22 @@ def recalculate_price_task(self, asset_id: int, buy_delta: str, sell_delta: str)
         cache_key = f'market:price:{asset_id}'
         cache.set(cache_key, str(new_price), timeout=60)
 
+        # Broadcast to WebSocket clients
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            async_to_sync(channel_layer.group_send)(
+                'market_updates',
+                {
+                    'type': 'market_price_update',
+                    'message': {
+                        'asset_id': asset_id,
+                        'price': float(new_price)
+                    }
+                }
+            )
+
         logger.info(
             "Price recalculated: asset=%s new_price=%s",
             asset_id, new_price
@@ -297,6 +313,22 @@ def price_tick_task(self):
 
             cache_key = f'market:price:{asset.id}'
             cache.set(cache_key, str(new_price), timeout=30)
+
+            # Broadcast to WebSocket clients
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                async_to_sync(channel_layer.group_send)(
+                    'market_updates',
+                    {
+                        'type': 'market_price_update',
+                        'message': {
+                            'asset_id': asset.id,
+                            'price': float(new_price)
+                        }
+                    }
+                )
 
         logger.debug("price_tick_task: ticked %d assets", assets.count())
 

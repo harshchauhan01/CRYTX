@@ -163,23 +163,23 @@
 .hm-card:hover { border-color: var(--cyan-dim); }
 .hm-card-head { display: flex; justify-content: space-between; margin-bottom: 10px; }
 .hm-cat {
-  font-family: var(--font-pixel); font-size: 8px; letter-spacing: 2px;
-  color: var(--cyan); margin-bottom: 2px;
+  font-family: var(--font-pixel); font-size: 10px; letter-spacing: 2px;
+  color: var(--cyan); margin-bottom: 4px;
 }
-.hm-name { font-family: var(--font-mono); font-size: 12px; color: var(--cyan-dim); }
-.hm-icon { font-size: 22px; }
+.hm-name { font-family: var(--font-mono); font-size: 14px; color: var(--cyan-dim); margin-bottom: 8px; }
+.hm-icon { font-size: 24px; }
 .hm-price-label {
-  font-family: var(--font-pixel); font-size: 7px; letter-spacing: 2px;
+  font-family: var(--font-pixel); font-size: 9px; letter-spacing: 2px;
   color: var(--cyan-dim); opacity: 0.6; margin-bottom: 4px;
 }
-.hm-price-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.hm-price-row { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
 .hm-price {
-  font-family: var(--font-pixel); font-size: 20px; color: var(--cyan);
+  font-family: var(--font-pixel); font-size: 24px; color: var(--cyan);
   text-shadow: var(--glow-cyan); letter-spacing: 1px;
 }
-.hm-price .psym { font-size: 12px; color: var(--cyan-dim); margin-right: 2px; }
-.hm-chg-up   { font-family: var(--font-pixel); font-size: 10px; color: var(--green); }
-.hm-chg-down { font-family: var(--font-pixel); font-size: 10px; color: var(--red); }
+.hm-price .psym { font-size: 14px; color: var(--cyan-dim); margin-right: 4px; }
+.hm-chg-up   { font-family: var(--font-pixel); font-size: 12px; color: var(--green); }
+.hm-chg-down { font-family: var(--font-pixel); font-size: 12px; color: var(--red); }
 .hm-chart { display: flex; align-items: flex-end; gap: 4px; height: 48px; margin-top: 16px; }
 .hm-bar { flex: 1; min-height: 4px; border-radius: 1px 1px 0 0; }
 
@@ -192,14 +192,14 @@
   background: var(--bg-card); padding: 32px 28px;
 }
 .how-num {
-  font-family: var(--font-pixel); font-size: 28px; color: var(--orange);
-  text-shadow: var(--glow-orange); margin-bottom: 16px;
+  font-family: var(--font-pixel); font-size: 32px; color: var(--cyan);
+  text-shadow: var(--glow-cyan); margin-bottom: 16px;
 }
 .how-title {
-  font-family: var(--font-pixel); font-size: 10px; letter-spacing: 2px;
+  font-family: var(--font-pixel); font-size: 12px; letter-spacing: 2px;
   color: var(--white); margin-bottom: 12px;
 }
-.how-desc { font-family: var(--font-mono); font-size: 13px; color: var(--cyan-dim); line-height: 1.7; }
+.how-desc { font-family: var(--font-mono); font-size: 14px; color: var(--cyan-dim); line-height: 1.7; }
 
 /* ─── Leaderboard strip (home) ─── */
 .home-lb-table {
