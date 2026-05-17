@@ -1,0 +1,68 @@
+.portfolio-page {
+  max-width: 1100px; margin: 0 auto;
+  padding: 24px; animation: slide-up 0.4s ease-out;
+}
+
+.portfolio-loading {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: calc(100vh - 70px); gap: 20px;
+}
+
+.portfolio-header {
+  margin-bottom: 24px; padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.portfolio-label { font-family: var(--font-pixel); font-size: 10px; letter-spacing: 3px; color: var(--green); margin-bottom: 4px; }
+.portfolio-title { font-size: 24px; }
+
+/* Summary */
+.portfolio-summary {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 16px; margin-bottom: 32px;
+}
+
+.summary-card {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 20px; background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: 4px;
+}
+
+.sc-label { font-family: var(--font-pixel); font-size: 8px; letter-spacing: 2px; color: var(--muted); }
+.sc-value { font-family: var(--font-mono); font-size: 20px; font-weight: 700; }
+
+/* Holdings Table */
+.holdings-table { width: 100%; border-collapse: collapse; }
+
+.holdings-table th {
+  font-family: var(--font-pixel); font-size: 9px;
+  letter-spacing: 2px; color: var(--muted);
+  text-align: left; padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.holdings-table td {
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.holdings-table tr { transition: background 0.2s; }
+.holdings-table tr:hover { background: var(--bg-card-hover); }
+
+.holding-name { display: flex; align-items: center; gap: 10px; }
+
+.positive { color: var(--green); }
+.negative { color: var(--red); }
+
+.empty-portfolio {
+  text-align: center; padding: 80px 20px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+@media (max-width: 768px) {
+  .portfolio-summary { grid-template-columns: repeat(2, 1fr); }
+  .holdings-table { display: block; overflow-x: auto; }
+}
